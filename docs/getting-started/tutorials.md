@@ -51,6 +51,22 @@ The best way to learn is by doing. Open these notebooks in Google Colab:
 
 ---
 
+## Supplementary Notebooks
+
+For more advanced workflows and specific analysis scenarios, explore the following local Jupyter notebooks in the repository:
+
+### Advanced Analysis & Data
+* **[Asset Correlations](https://github.com/engineerinvestor/Portfolio-Analysis/blob/main/Tutorials/Asset_Correlations.ipynb)**: Guide to calculating correlation matrices, rolling correlations, and covariance estimation for multi-asset portfolios.
+* **[QuantStats & yfinance Integration](https://github.com/engineerinvestor/Portfolio-Analysis/blob/main/Tutorials/Portfolio_Analysis_Using_QuantStats_and_yfinance.ipynb)**: Leverage external packages like `QuantStats` alongside `yfinance` to perform deep performance profiling.
+* **[Beginner's Guide to Contributing](https://github.com/engineerinvestor/Portfolio-Analysis/blob/main/Tutorials/Beginner's_Guide_to_Contributing_to_the_Portfolio_Analysis_Repository.ipynb)**: A walkthrough guide tailored for new developers looking to contribute.
+
+### Advanced Visualizations
+* **[Financial Independence & Net Worth Goals](https://github.com/engineerinvestor/Portfolio-Analysis/blob/main/Visualization/Financial_Independence_(FI)_Goals_and_Net_Worth_Visualization.ipynb)**: Modeling long-term wealth accumulation and mapping portfolios to retirement targets.
+* **[Equity Style Box Visualization](https://github.com/engineerinvestor/Portfolio-Analysis/blob/main/Visualization/Visualize_the_Equity_Style_Box.ipynb)**: Plot standard Morningstar-style equity style boxes using constituent size and style characteristics.
+* **[Portfolio Allocation Charts](https://github.com/engineerinvestor/Portfolio-Analysis/blob/main/Visualization/Portfolio_Allocation_Pie_Chart.ipynb)**: Advanced plotting options for clean asset allocation pie and donut charts.
+
+---
+
 ## Video Tutorials
 
 Coming soon! Subscribe to [Engineer Investor](https://twitter.com/egr_investor) for updates.

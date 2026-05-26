@@ -53,3 +53,6 @@ Thumbs.db
 
 # MkDocs build output
 site/
+
+# Antigravity CLI system files
+.antigravitycli/

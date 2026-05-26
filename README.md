@@ -12,7 +12,43 @@ Open-source portfolio analysis tools for DIY investors and finance enthusiasts. 
 
 **[Read the Full Documentation](https://engineerinvestor.github.io/Portfolio-Analysis/)** - Comprehensive guides, API reference, and examples.
 
-## Quick Start
+## Quick Start with uv (Highly Recommended)
+
+[uv](https://github.com/astral-sh/uv) is an extremely fast Python package manager and resolver. You can instantly set up the environment and run all visual or LLM commentary modules using `uv`:
+
+### 1. Run the Interactive Q&A Shell & Commentary Demo
+Set up a sandbox virtual environment and run the interactive CLI immediately with:
+```bash
+uv run scratch/run_demo.py
+```
+*(To test live Gemini narration, make sure to set `$env:GEMINI_API_KEY="your_key"` in PowerShell first!)*
+
+### 2. Set Up a Dev Environment & Install Dependencies
+Create a virtual environment and register the portfolio analysis package in editable development mode in under 1 second:
+```bash
+# Create a virtual environment
+uv venv
+
+# Activate the virtual environment (Windows PowerShell)
+.venv\Scripts\Activate.ps1
+
+# Install the package in editable mode with all development features
+uv pip install -e ".[all]"
+```
+
+### 3. Run the Streamlit Web Application
+```bash
+uv run streamlit run streamlit_app/app.py
+```
+
+### 4. Run the PyTest Suite
+```bash
+uv run pytest
+```
+
+---
+
+## Quick Start (Standard Pip)
 
 ### Try Online (No Installation)
 

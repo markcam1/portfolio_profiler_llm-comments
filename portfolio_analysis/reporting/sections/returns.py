@@ -34,8 +34,11 @@ class ReturnsSection(ReportSection):
         """Calculate monthly returns as a year x month matrix."""
         returns = self.portfolio.calculate_portfolio_returns()
 
-        # Resample to monthly returns (use 'M' for pandas < 2.2 compatibility)
-        monthly = (1 + returns).resample("M").prod() - 1
+        # Resample to monthly returns (use ME for pandas >= 2.2, fallback to M for older versions)
+        try:
+            monthly = (1 + returns).resample("ME").prod() - 1
+        except ValueError:
+            monthly = (1 + returns).resample("M").prod() - 1
 
         # Create year-month matrix
         monthly_df = pd.DataFrame(
@@ -115,11 +118,13 @@ class ReturnsSection(ReportSection):
     def compute_data(self) -> dict[str, Any]:
         """Compute returns section data."""
         returns = self.portfolio.calculate_portfolio_returns()
-        # Use 'M' and 'Y' for pandas < 2.2 compatibility
-        monthly = (1 + returns).resample("M").prod() - 1
-
-        # Calculate annual returns
-        annual = (1 + returns).resample("Y").prod() - 1
+        # Use ME/YE for pandas >= 2.2, fallback to M/Y for older versions
+        try:
+            monthly = (1 + returns).resample("ME").prod() - 1
+            annual = (1 + returns).resample("YE").prod() - 1
+        except ValueError:
+            monthly = (1 + returns).resample("M").prod() - 1
+            annual = (1 + returns).resample("Y").prod() - 1
 
         best_month = monthly.max()
         best_month_date = monthly.idxmax()

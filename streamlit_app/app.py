@@ -6,6 +6,10 @@ A professional portfolio analysis tool built with transparency and user value in
 Author: Engineer Investor (@egr_investor)
 """
 
+import sys
+import os
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -14,6 +18,18 @@ import plotly.express as px
 import plotly.graph_objects as go
 from datetime import datetime, timedelta
 from scipy.optimize import minimize
+
+# Import AI Analysis modules
+from portfolio_analysis.ai_analysis import ProfileItem, ProfileSnapshot, analyze_profile
+from portfolio_analysis.ai_analysis.config import is_api_configured
+
+# Import Classification modules
+from portfolio_analysis.classification import (
+    get_asset_class_and_region,
+    get_sector_weights_rollup,
+    get_benchmark_sector_weights
+)
+from portfolio_analysis.data.classification import HoldingClassifier
 
 # Page configuration
 st.set_page_config(
@@ -350,19 +366,172 @@ with tab1:
     # Calculate metrics
     metrics = calculate_portfolio_metrics(data, weights, risk_free_rate)
 
-    # Display metrics
-    col1, col2, col3, col4, col5 = st.columns(5)
-    col1.metric("Annual Return", f"{metrics['Annual Return']*100:.2f}%")
-    col2.metric("Annual Volatility", f"{metrics['Annual Volatility']*100:.2f}%")
-    col3.metric("Sharpe Ratio", f"{metrics['Sharpe Ratio']:.2f}")
-    col4.metric("Sortino Ratio", f"{metrics['Sortino Ratio']:.2f}")
-    col5.metric("Max Drawdown", f"{metrics['Max Drawdown']*100:.2f}%")
+    # ----------------------------------------------------
+    # AI ANALYSIS STATE MANAGEMENT
+    # ----------------------------------------------------
+    # Invalidate AI analysis results if any portfolio input changes
+    current_portfolio_key = f"{tickers_input}-{weights_input}-{start_date}-{end_date}-{risk_free_rate}"
+    if "last_portfolio_key" not in st.session_state or st.session_state.last_portfolio_key != current_portfolio_key:
+        st.session_state.last_portfolio_key = current_portfolio_key
+        if "ai_analysis_results" in st.session_state:
+            del st.session_state.ai_analysis_results
 
-    # Allocation pie chart
+    # Helper function to render AI overlay commentary cards
+    def render_ai_commentary(item_id: str):
+        if "ai_analysis_results" in st.session_state:
+            comments = st.session_state.ai_analysis_results
+            comment_obj = next((c for c in comments if c.item_id == item_id), None)
+            if comment_obj:
+                if comment_obj.status == "ok":
+                    st.info(f"🤖 **AI Analysis:** {comment_obj.comment}")
+                elif comment_obj.status == "skipped_no_data":
+                    st.warning(f"🤖 *Insufficient Data:* {comment_obj.comment}")
+                elif comment_obj.status == "error":
+                    st.error("⚠️ *AI error generating comment for this item.*")
+
+    # ----------------------------------------------------
+    # PHASE 2 NUMERIC CALCULATIONS
+    # ----------------------------------------------------
+    # 1. Rollup Asset Class Weights
+    asset_alloc_raw = {}
+    for t, w in zip(tickers, weights):
+        meta = get_asset_class_and_region(t)
+        ac = meta["asset_class"].capitalize()
+        asset_alloc_raw[ac] = asset_alloc_raw.get(ac, 0.0) + (w * 100.0)
+    asset_alloc = {ac: round(val, 2) for ac, val in asset_alloc_raw.items()}
+
+    # 2. Rollup Region Weights
+    region_alloc_raw = {}
+    for t, w in zip(tickers, weights):
+        meta = get_asset_class_and_region(t)
+        reg = meta["region"].capitalize()
+        region_alloc_raw[reg] = region_alloc_raw.get(reg, 0.0) + (w * 100.0)
+    region_alloc = {reg: round(val, 2) for reg, val in region_alloc_raw.items()}
+
+    # 3. Rollup Sector Weights
+    port_weights_dict = dict(zip(tickers, weights))
+    sector_alloc_raw = get_sector_weights_rollup(port_weights_dict)
+    sector_alloc = {sec: round(val, 2) for sec, val in sector_alloc_raw.items()}
+
+    # 4. Sector comparison vs benchmark VOO
+    benchmark_ticker = "VOO"
+    benchmark_sectors = get_benchmark_sector_weights(benchmark_ticker)
+    
+    sector_comparison = {}
+    all_sectors = set(list(sector_alloc.keys()) + list(benchmark_sectors.keys()))
+    for sec in all_sectors:
+        p_wt = sector_alloc.get(sec, 0.0)
+        b_wt = benchmark_sectors.get(sec, 0.0)
+        if p_wt > 0 or b_wt > 0:
+            sector_comparison[sec] = {
+                "portfolio_pct": round(p_wt, 2),
+                "benchmark_pct": round(b_wt, 2)
+            }
+
+    # 5. Holdings metadata
+    holdings_metadata = []
+    for t, w in zip(tickers, weights):
+        classif = HoldingClassifier.get_classification(t)
+        holdings_metadata.append({
+            "ticker": t,
+            "name": classif["name"],
+            "weight_pct": round(w * 100.0, 2),
+            "asset_class": classif["asset_class"].capitalize(),
+            "region": classif["region"].capitalize(),
+            "primary_sector": classif["sector"] or "N/A"
+        })
+
+    # ----------------------------------------------------
+    # AI ANALYSIS PASS TRIGGER BOX
+    # ----------------------------------------------------
+    st.subheader("🤖 AI Analysis Pass")
+    if not is_api_configured():
+        st.warning(
+            "API Key missing! Please set the 'GEMINI_API_KEY' or 'GOOGLE_API_KEY' "
+            "environment variable to enable natural language commentary."
+        )
+    else:
+        col_btn, col_info = st.columns([1, 3])
+        with col_btn:
+            trigger_analysis = st.button("Generate AI Analysis Report", type="primary", use_container_width=True)
+        with col_info:
+            st.caption("Performs a fast, stateless batched commentary pass over every item, chart, and metric on this page.")
+            
+        if trigger_analysis:
+            with st.spinner("Analyzing portfolio profile snapshot..."):
+                # Construct dynamic portfolio summary for context
+                summary_parts = [f"{ticker} {weight*100:.1f}%" for ticker, weight in zip(tickers, weights)]
+                portfolio_summary = (
+                    f"Portfolio: {', '.join(summary_parts)}. "
+                    f"Annual return {metrics['Annual Return']*100:.2f}%, "
+                    f"volatility {metrics['Annual Volatility']*100:.2f}%, "
+                    f"max drawdown {metrics['Max Drawdown']*100:.2f}%."
+                )
+
+                # Prepare batched items (all numeric values rounded cleanly to 2 decimal places)
+                profile_items = [
+                    ProfileItem(item_id="annual_return", item_type="metric", title="Annual Return", data={"value_pct": round(float(metrics["Annual Return"] * 100.0), 2)}),
+                    ProfileItem(item_id="annual_volatility", item_type="metric", title="Annual Volatility", data={"value_pct": round(float(metrics["Annual Volatility"] * 100.0), 2)}),
+                    ProfileItem(item_id="sharpe_ratio", item_type="metric", title="Sharpe Ratio", data={"value": round(float(metrics["Sharpe Ratio"]), 2)}),
+                    ProfileItem(item_id="sortino_ratio", item_type="metric", title="Sortino Ratio", data={"value": round(float(metrics["Sortino Ratio"]), 2)}),
+                    ProfileItem(item_id="max_drawdown", item_type="metric", title="Max Drawdown", data={"value_pct": round(float(metrics["Max Drawdown"] * 100.0), 2)}),
+                    
+                    ProfileItem(item_id="allocation_ticker", item_type="chart", title="Allocation by Ticker", data={"by_ticker": {t: round(float(w * 100.0), 2) for t, w in zip(tickers, weights)}}),
+                    ProfileItem(item_id="cumulative_returns", item_type="chart", title="Cumulative Returns", data={
+                        "total_growth_pct": round(float((metrics["cumulative_returns"].iloc[-1] - 1) * 100.0), 2),
+                        "period": f"{metrics['cumulative_returns'].index[0].strftime('%Y-%m')} to {metrics['cumulative_returns'].index[-1].strftime('%Y-%m')}",
+                        "end_drawdown_pct": round(float(metrics["Max Drawdown"] * 100.0), 2)
+                    }),
+                    ProfileItem(item_id="individual_returns", item_type="chart", title="Individual Asset Returns", data={
+                        t: round(float((1 + data[t].pct_change().dropna()).cumprod().iloc[-1] - 1) * 100.0, 2) for t in tickers
+                    }),
+                    
+                    ProfileItem(item_id="allocation_asset_class", item_type="chart", title="Allocation by Asset Class", data={"by_asset_class": asset_alloc}, phase="p2"),
+                    ProfileItem(item_id="allocation_region", item_type="chart", title="Allocation by Region", data={"by_region": region_alloc}, phase="p2"),
+                    ProfileItem(item_id="sector_comparison", item_type="chart", title="Sector Weights vs Benchmark", data={"portfolio_vs_benchmark": sector_comparison}, phase="p2"),
+                    ProfileItem(item_id="holdings_metadata", item_type="table", title="Holdings Metadata Table", data={"holdings": holdings_metadata}, phase="p2"),
+                ]
+
+                snapshot = ProfileSnapshot(
+                    as_of_date=datetime.now().strftime("%Y-%m-%d"),
+                    base_currency="USD",
+                    items=profile_items,
+                    portfolio_summary=portfolio_summary
+                )
+                
+                try:
+                    comments = analyze_profile(snapshot)
+                    st.session_state.ai_analysis_results = comments
+                    st.success("AI Commentary successfully generated! Insights have been attached below.")
+                except Exception as e:
+                    st.error(f"Error running AI Commentary Pass: {e}")
+
+    # ----------------------------------------------------
+    # RENDER V1 METRICS & OVERLAYS
+    # ----------------------------------------------------
+    st.subheader("Key Portfolio Metrics")
+    col1, col2, col3, col4, col5 = st.columns(5)
+    with col1:
+        st.metric("Annual Return", f"{metrics['Annual Return']*100:.2f}%")
+        render_ai_commentary("annual_return")
+    with col2:
+        st.metric("Annual Volatility", f"{metrics['Annual Volatility']*100:.2f}%")
+        render_ai_commentary("annual_volatility")
+    with col3:
+        st.metric("Sharpe Ratio", f"{metrics['Sharpe Ratio']:.2f}")
+        render_ai_commentary("sharpe_ratio")
+    with col4:
+        st.metric("Sortino Ratio", f"{metrics['Sortino Ratio']:.2f}")
+        render_ai_commentary("sortino_ratio")
+    with col5:
+        st.metric("Max Drawdown", f"{metrics['Max Drawdown']*100:.2f}%")
+        render_ai_commentary("max_drawdown")
+
+    # Allocation pie chart & cumulative chart
     col1, col2 = st.columns([1, 2])
 
     with col1:
-        st.subheader("Allocation")
+        st.subheader("Allocation by Ticker")
         fig_pie = px.pie(
             values=weights,
             names=tickers,
@@ -370,6 +539,7 @@ with tab1:
         )
         fig_pie.update_layout(margin=dict(t=0, b=0, l=0, r=0))
         st.plotly_chart(fig_pie, use_container_width=True)
+        render_ai_commentary("allocation_ticker")
 
     with col2:
         st.subheader("Cumulative Returns")
@@ -384,9 +554,11 @@ with tab1:
         fig_cumulative.update_layout(
             yaxis_title='Growth of $1',
             xaxis_title='Date',
-            hovermode='x unified'
+            hovermode='x unified',
+            margin=dict(t=30, b=0, l=0, r=0)
         )
         st.plotly_chart(fig_cumulative, use_container_width=True)
+        render_ai_commentary("cumulative_returns")
 
     # Individual asset performance
     st.subheader("Individual Asset Returns")
@@ -404,9 +576,76 @@ with tab1:
     fig_assets.update_layout(
         yaxis_title='Growth of $1',
         xaxis_title='Date',
-        hovermode='x unified'
+        hovermode='x unified',
+        margin=dict(t=30, b=0, l=0, r=0)
     )
     st.plotly_chart(fig_assets, use_container_width=True)
+    render_ai_commentary("individual_returns")
+
+    # ----------------------------------------------------
+    # RENDER PHASE 2 VISUAL PANELS & OVERLAYS
+    # ----------------------------------------------------
+    st.markdown("---")
+    st.header("⚖️ Asset Class & Sector Allocation")
+    st.write("Detailed metadata rollups derived dynamically from fund classifications and benchmarks.")
+
+    col_ac, col_reg = st.columns(2)
+    with col_ac:
+        st.subheader("Allocation by Asset Class")
+        fig_ac = px.pie(
+            values=list(asset_alloc.values()),
+            names=list(asset_alloc.keys()),
+            hole=0.4
+        )
+        fig_ac.update_layout(margin=dict(t=0, b=0, l=0, r=0))
+        st.plotly_chart(fig_ac, use_container_width=True)
+        render_ai_commentary("allocation_asset_class")
+
+    with col_reg:
+        st.subheader("Allocation by Region")
+        fig_reg = px.pie(
+            values=list(region_alloc.values()),
+            names=list(region_alloc.keys()),
+            hole=0.4
+        )
+        fig_reg.update_layout(margin=dict(t=0, b=0, l=0, r=0))
+        st.plotly_chart(fig_reg, use_container_width=True)
+        render_ai_commentary("allocation_region")
+
+    # GICS Sector Comparison Chart
+    st.subheader("Sector Allocation vs S&P 500 (VOO)")
+    sector_records = []
+    for sec, sec_data in sector_comparison.items():
+        sector_records.append({"Sector": sec, "Allocation": "Portfolio", "Weight (%)": sec_data["portfolio_pct"]})
+        sector_records.append({"Sector": sec, "Allocation": "S&P 500 (VOO)", "Weight (%)": sec_data["benchmark_pct"]})
+    
+    if sector_records:
+        sector_df = pd.DataFrame(sector_records)
+        fig_sector = px.bar(
+            sector_df,
+            x="Sector",
+            y="Weight (%)",
+            color="Allocation",
+            barmode="group",
+            labels={"Weight (%)": "Weight (%)"},
+            color_discrete_sequence=['#1F77B4', '#FF7F0E']
+        )
+        fig_sector.update_layout(margin=dict(t=30, b=0, l=0, r=0))
+        st.plotly_chart(fig_sector, use_container_width=True)
+    else:
+        st.info("No sector exposure data available.")
+    render_ai_commentary("sector_comparison")
+
+    # Holdings details table
+    st.subheader("Portfolio Holdings Details")
+    metadata_df = pd.DataFrame(holdings_metadata)
+    metadata_df.columns = ["Ticker", "Name", "Weight (%)", "Asset Class", "Region", "Primary Sector"]
+    st.dataframe(
+        metadata_df.style.format({"Weight (%)": "{:.2f}%"}),
+        use_container_width=True,
+        hide_index=True
+    )
+    render_ai_commentary("holdings_metadata")
 
 
 # ============================================

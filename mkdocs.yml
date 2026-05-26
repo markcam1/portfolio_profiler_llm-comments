@@ -94,7 +94,10 @@ nav:
     - Factor Analysis: examples/factor-analysis.md
     - Optimization: examples/optimization.md
   - Contributing: contributing.md
+  - Roadmap: ROADMAP_V2.md
   - Changelog: changelog.md
+  - Design Specs:
+    - AI Analysis Layer Spec: specs/portfolio-llm-layer-spec-v02.md
 
 extra:
   social:

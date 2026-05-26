@@ -112,7 +112,10 @@ class DataLoader:
         elif frequency == "weekly":
             returns = data.resample("W").last().pct_change().dropna()
         elif frequency == "monthly":
-            returns = data.resample("M").last().pct_change().dropna()
+            try:
+                returns = data.resample("ME").last().pct_change().dropna()
+            except ValueError:
+                returns = data.resample("M").last().pct_change().dropna()
         else:
             raise ValueError(f"Unknown frequency: {frequency}")
 
