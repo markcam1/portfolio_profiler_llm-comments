@@ -115,6 +115,11 @@ streamlit run streamlit_app/app.py
 - Optional benchmark comparison section
 - Self-contained HTML files with no external dependencies
 
+### AI Commentary & Insights
+- **Structured LLM Integration**: Stateless, single-shot batched pass providing data-anchored, natural-language commentary for every dashboard metric and chart.
+- **Asset & Sector Classification**: Automated categorization of tickers into asset classes, regions, and equity-ETF sector holdings (fetched via live `yfinance` holdings).
+- **Cost-Efficient Interaction**: Generates commentary on-demand behind an "AI Analysis" button rather than on page render.
+
 ### Interactive Tools
 - Jupyter widgets for Colab/notebook analysis
 - Streamlit web application
@@ -219,6 +224,8 @@ Portfolio-Analysis/
 │   ├── metrics/                 # Performance & benchmark metrics
 │   ├── analysis/                # Portfolio & Monte Carlo analysis
 │   ├── factors/                 # Factor analysis (Fama-French, etc.)
+│   ├── classification/          # Asset class & sector rollups (numeric toolkit)
+│   ├── ai_analysis/             # AI Analysis layer (structured LLM integration)
 │   ├── visualization/           # Plotting & interactive widgets
 │   ├── reporting/               # HTML tear sheet generation
 │   └── utils/                   # Helper functions
@@ -290,6 +297,8 @@ See also: [Beginner's Guide to Contributing](https://github.com/engineerinvestor
 - [x] Streamlit web application
 - [x] HTML tear sheet reports
 - [x] Factor analysis (Fama-French, Carhart, return/risk attribution)
+- [x] Asset Class & Sector Classification rollups
+- [x] AI Portfolio Analysis & Structured Commentary (Gemini Integration)
 - [ ] Time-varying risk-free rate (T-bill data)
 - [ ] Tax-loss harvesting tools
 - [ ] Comprehensive test coverage
